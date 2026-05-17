@@ -16,8 +16,7 @@ if uploaded_file:
             if extracted:
                 text += extracted + "\n"
 
-    st.subheader("Extracted Text")
-    st.text(text[:3000])
+
 
     # Extract fields
     part_no = re.search(r'Part No\.\s*(\S+)', text)
