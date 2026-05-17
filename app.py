@@ -19,7 +19,7 @@ if uploaded_file:
     st.subheader("Extracted Text")
     st.text(text[:3000])
 
-    # Extraction logic
+    # Extract fields
     part_no = re.search(r'Part No\.\s*(\S+)', text)
     part_name = re.search(r'Part Name\s*(.+)', text)
     rev = re.search(r'Drawing Rev\s*(\S+)', text)
