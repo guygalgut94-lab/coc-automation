@@ -48,7 +48,7 @@ if uploaded_file:
     st.write("QTY:", extracted_qty)
 
     if st.button("Generate COC"):
-        doc = Document("COC Format(2).docx")
+        doc = Document("COC Format.docx")
 
         # Replace text in paragraphs
         for para in doc.paragraphs:
