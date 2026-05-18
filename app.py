@@ -7,80 +7,111 @@ from datetime import datetime
 
 st.title("COC Automation")
 
-uploaded_file = st.file_uploader("Upload COT PDF", type="pdf")
+uploaded_files = st.file_uploader(
+    "Upload COT PDF files",
+    type="pdf",
+    accept_multiple_files=True
+)
 
-if uploaded_file:
+def extract_text_from_pdf(uploaded_file):
     text = ""
-
     with pdfplumber.open(uploaded_file) as pdf:
         for page in pdf.pages:
             extracted = page.extract_text()
             if extracted:
                 text += extracted + "\n"
+    return text
 
-    # Extract fields
-    date_match = re.search(r'Date[:\s]*([0-9]{1,2}[-/][A-Za-z0-9]{1,3}[-/][0-9]{2,4})', text)
-    customer_match = re.search(r'Customer\s*(.+)', text)
-    po_match = re.search(r'PO Number[:\s]*([A-Za-z0-9\-]+)', text)
+def extract_item_data(text, file_name):
+    customer_match = re.search(r'Customer\s*(.+?)\s*KSW Project ID', text)
+    po_match = re.search(r'PO Number[:\s]*([A-Za-z0-9\-_]+)', text)
+    part_no_match = re.search(r'Part No\.\s*(\S+)', text)
+    desc_match = re.search(r'Part Name\s*(.*?)\s+Material', text)
+    rev_match = re.search(r'Drawing Rev\s*(\d+)', text)
+    qty_match = re.search(r'Lot Qty\s*(\d+)', text)
 
-    part_no = re.search(r'Part No\.\s*(\S+)', text)
-    part_name = re.search(r'Part Name\s*(.+)', text)
-    rev = re.search(r'Drawing Rev\s*(\S+)', text)
-    qty = re.search(r'Lot Qty\s*(\d+)', text)
+    return {
+        "file_name": file_name,
+        "customer": customer_match.group(1).strip() if customer_match else "",
+        "po": po_match.group(1).strip() if po_match else "",
+        "part_no": part_no_match.group(1).strip() if part_no_match else "",
+        "description": desc_match.group(1).strip() if desc_match else "",
+        "rev": rev_match.group(1).strip() if rev_match else "",
+        "qty": qty_match.group(1).strip() if qty_match else ""
+    }
 
-    extracted_date = date_match.group(1) if date_match else datetime.today().strftime("%d %b %Y")
-    extracted_customer = customer_match.group(1).strip() if customer_match else ""
-    extracted_po = po_match.group(1).strip() if po_match else ""
+if uploaded_files:
+    items = []
 
-    extracted_part_no = part_no.group(1).strip() if part_no else ""
-    extracted_description = part_name.group(1).strip() if part_name else ""
-    extracted_rev = rev.group(1).strip() if rev else ""
-    extracted_qty = qty.group(1).strip() if qty else ""
+    for uploaded_file in uploaded_files:
+        text = extract_text_from_pdf(uploaded_file)
+        item = extract_item_data(text, uploaded_file.name)
+        items.append(item)
 
-    st.subheader("Extracted Data")
+    extracted_date = datetime.today().strftime("%d %b %Y")
 
-    st.write("Date:", extracted_date)
-    st.write("Customer:", extracted_customer)
-    st.write("PO Number:", extracted_po)
-    st.write("Part No:", extracted_part_no)
-    st.write("Description:", extracted_description)
-    st.write("REV:", extracted_rev)
-    st.write("QTY:", extracted_qty)
+    first_customer = items[0]["customer"] if items else ""
+    first_po = items[0]["po"] if items else ""
+
+    st.subheader("Extracted Parts")
+
+    st.dataframe([
+        {
+            "#": index + 1,
+            "File Name": item["file_name"],
+            "Customer": item["customer"],
+            "PO Number": item["po"],
+            "Part No": item["part_no"],
+            "Description": item["description"],
+            "REV": item["rev"],
+            "QTY": item["qty"]
+        }
+        for index, item in enumerate(items)
+    ])
+
+    st.write("COC Date:", extracted_date)
+    st.write("Customer:", first_customer)
+    st.write("PO Number:", first_po)
 
     if st.button("Generate COC"):
         doc = Document("COC Format.docx")
 
-        # Replace text in paragraphs
-        for para in doc.paragraphs:
-            if para.text.strip().startswith("Date:"):
-                para.text = f"Date: {extracted_date}"
+        # Table 1 = top header table
+        top_table = doc.tables[0]
 
-            if para.text.strip().startswith("Customer:"):
-                para.text = f"Customer: {extracted_customer}"
+        for row in top_table.rows:
+            for cell in row.cells:
+                if "Date:" in cell.text:
+                    cell.text = f"Date: {extracted_date}"
+                elif "Manufacturer:" in cell.text:
+                    cell.text = "Manufacturer: Bconduct HK"
+                elif "Customer:" in cell.text:
+                    cell.text = f"Customer: {first_customer}"
+                elif "PO Number:" in cell.text:
+                    cell.text = f"PO Number: {first_po}"
 
-            if para.text.strip().startswith("PO Number:"):
-                para.text = f"PO Number: {extracted_po}"
+        # Table 2 = parts table
+        parts_table = doc.tables[1]
 
-        # Fill item table
-        table = doc.tables[0]
+        # Remove existing empty rows under the header
+        while len(parts_table.rows) > 1:
+            row = parts_table.rows[1]
+            row._element.getparent().remove(row._element)
 
-        # Use first empty row if it exists, otherwise add row
-        if len(table.rows) > 1:
-            row_cells = table.rows[1].cells
-        else:
-            row_cells = table.add_row().cells
-
-        row_cells[0].text = "1"
-        row_cells[1].text = extracted_part_no
-        row_cells[2].text = extracted_description
-        row_cells[3].text = extracted_rev
-        row_cells[4].text = extracted_qty
+        # Add one row per uploaded COT PDF
+        for index, item in enumerate(items, start=1):
+            row_cells = parts_table.add_row().cells
+            row_cells[0].text = str(index)
+            row_cells[1].text = item["part_no"]
+            row_cells[2].text = item["description"]
+            row_cells[3].text = item["rev"]
+            row_cells[4].text = item["qty"]
 
         buffer = BytesIO()
         doc.save(buffer)
         buffer.seek(0)
 
-        file_name = f"COC_{extracted_part_no or 'Generated'}.docx"
+        file_name = f"COC_{first_po or first_customer or 'Generated'}.docx"
 
         st.download_button(
             label="Download COC DOCX",
