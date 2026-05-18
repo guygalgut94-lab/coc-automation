@@ -17,8 +17,9 @@ uploaded_files = st.file_uploader(
 
 worker = st.selectbox(
     "Certified by",
-    ["Ilan", "Mark", "Conley"]
+    ["Guy", "Ilan" ]
 )
+
 
 def extract_text_from_pdf(uploaded_file):
     text = ""
