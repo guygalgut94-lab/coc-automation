@@ -31,47 +31,26 @@ def extract_text_from_pdf(uploaded_file):
 
     return text
 
+def get_value_between(text, start, end):
+    pattern = rf"{re.escape(start)}\s*(.*?)\s*{re.escape(end)}"
+    match = re.search(pattern, text, re.DOTALL)
+    return match.group(1).strip() if match else ""
+
 def extract_item_data(text, file_name):
-    supplier_match = re.search(
-        r'Supplier Name\s*(.+)',
-        text
-    )
+    supplier = get_value_between(text, "Supplier Name", "Sampling Plan")
+    customer = get_value_between(text, "Customer", "Level 2")
+    po = get_value_between(text, "Customer ID", "Part Name")
 
-    customer_match = re.search(
-        r'Customer\s*(.+?)\s*KSW Project ID',
-        text
-    )
-
-    po_match = re.search(
-        r'Customer ID\s*([A-Za-z0-9\/\-_]+)',
-        text
-    )
-
-    part_no_match = re.search(
-        r'Part No\.\s*(\S+)',
-        text
-    )
-
-    desc_match = re.search(
-        r'Part Name\s*(.*?)\s+Material',
-        text
-    )
-
-    rev_match = re.search(
-        r'Drawing Rev\s*(\d+)',
-        text
-    )
-
-    qty_match = re.search(
-        r'Lot Qty\s*(\d+)',
-        text
-    )
+    part_no_match = re.search(r'Part No\.\s*(\S+)', text)
+    desc_match = re.search(r'Part Name\s*(.*?)\s+Material', text)
+    rev_match = re.search(r'Drawing Rev\s*(\d+)', text)
+    qty_match = re.search(r'Lot Qty\s*(\d+)', text)
 
     return {
         "file_name": file_name,
-        "supplier": supplier_match.group(1).strip() if supplier_match else "",
-        "customer": customer_match.group(1).strip() if customer_match else "",
-        "po": po_match.group(1).strip() if po_match else "",
+        "supplier": supplier,
+        "customer": customer,
+        "po": po,
         "part_no": part_no_match.group(1).strip() if part_no_match else "",
         "description": desc_match.group(1).strip() if desc_match else "",
         "rev": rev_match.group(1).strip() if rev_match else "",
@@ -173,7 +152,6 @@ if uploaded_files:
         replace_placeholders(doc, {
             "[Date]": coc_date,
             "[Supplier Name]": supplier_name,
-            "[Supplier name]": supplier_name,
             "[Customer Name]": customer_name,
             "[Customer Id]": po_number
         })
