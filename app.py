@@ -7,7 +7,15 @@ from io import BytesIO
 from datetime import datetime
 import os
 
+# ============================================
+# PAGE TITLE
+# ============================================
+
 st.title("COC Automation")
+
+# ============================================
+# FILE UPLOAD
+# ============================================
 
 uploaded_files = st.file_uploader(
     "Upload COT PDF files",
@@ -15,22 +23,37 @@ uploaded_files = st.file_uploader(
     accept_multiple_files=True
 )
 
+# ============================================
+# SIGNER SELECTION
+# ============================================
+
 worker = st.selectbox(
     "Certified by",
     ["Guy", "Ilan", "Mark", "Conley"]
 )
 
+# ============================================
+# PDF TEXT EXTRACTION
+# ============================================
+
 def extract_text_from_pdf(uploaded_file):
+
     text = ""
 
     with pdfplumber.open(uploaded_file) as pdf:
+
         for page in pdf.pages:
+
             extracted = page.extract_text()
 
             if extracted:
                 text += extracted + "\n"
 
     return text
+
+# ============================================
+# EXTRACT DATA FROM COT
+# ============================================
 
 def extract_item_data(text, file_name):
 
@@ -60,13 +83,38 @@ def extract_item_data(text, file_name):
     )
 
     return {
+
         "file_name": file_name,
-        "po": po_match.group(1).strip() if po_match else "",
-        "part_no": part_no_match.group(1).strip() if part_no_match else "",
-        "description": desc_match.group(1).strip() if desc_match else "",
-        "rev": rev_match.group(1).strip() if rev_match else "",
-        "qty": qty_match.group(1).strip() if qty_match else ""
+
+        "po": (
+            po_match.group(1).strip()
+            if po_match else ""
+        ),
+
+        "part_no": (
+            part_no_match.group(1).strip()
+            if part_no_match else ""
+        ),
+
+        "description": (
+            desc_match.group(1).strip()
+            if desc_match else ""
+        ),
+
+        "rev": (
+            rev_match.group(1).strip()
+            if rev_match else ""
+        ),
+
+        "qty": (
+            qty_match.group(1).strip()
+            if qty_match else ""
+        )
     }
+
+# ============================================
+# FILL HEADER TABLE VALUES
+# ============================================
 
 def fill_value_after_label(table, label, value):
 
@@ -77,31 +125,47 @@ def fill_value_after_label(table, label, value):
             if label in cell.text:
 
                 if i + 1 < len(row.cells):
+
                     row.cells[i + 1].text = value
+
                 else:
+
                     cell.text = f"{label} {value}"
 
                 return
 
+# ============================================
+# INSERT SIGNATURE IMAGE
+# ============================================
+
 def insert_signature(doc, worker_name):
 
-    signature_path = f"signatures/{worker_name}.png"
+    signature_path = (
+        f"signatures/{worker_name}.png"
+    )
 
     if not os.path.exists(signature_path):
-        st.warning(f"Signature image not found: {signature_path}")
+
+        st.warning(
+            f"Signature image not found: {signature_path}"
+        )
+
         return
 
     for para in doc.paragraphs:
 
         if "[signature]" in para.text:
 
-            para.text = para.text.replace("[signature]", "")
+            para.text = para.text.replace(
+                "[signature]",
+                ""
+            )
 
             run = para.add_run()
 
             run.add_picture(
                 signature_path,
-                width=Inches(1.5)
+                width=Inches(0.9)
             )
 
             return
@@ -110,13 +174,23 @@ def insert_signature(doc, worker_name):
         "[signature] placeholder not found in template."
     )
 
+# ============================================
+# MAIN APP
+# ============================================
+
 if uploaded_files:
 
     items = []
 
+    # ----------------------------------------
+    # EXTRACT ALL PDF DATA
+    # ----------------------------------------
+
     for uploaded_file in uploaded_files:
 
-        text = extract_text_from_pdf(uploaded_file)
+        text = extract_text_from_pdf(
+            uploaded_file
+        )
 
         item = extract_item_data(
             text,
@@ -125,9 +199,22 @@ if uploaded_files:
 
         items.append(item)
 
-    coc_date = datetime.today().strftime("%d %b %Y")
+    # ----------------------------------------
+    # COC DATE
+    # ----------------------------------------
 
-    default_po = items[0]["po"] if items else ""
+    coc_date = datetime.today().strftime(
+        "%d %b %Y"
+    )
+
+    default_po = (
+        items[0]["po"]
+        if items else ""
+    )
+
+    # ----------------------------------------
+    # HEADER INPUTS
+    # ----------------------------------------
 
     st.subheader("Header Information")
 
@@ -141,30 +228,62 @@ if uploaded_files:
         value=default_po
     )
 
+    # ----------------------------------------
+    # SHOW EXTRACTED TABLE
+    # ----------------------------------------
+
     st.subheader("Extracted Parts")
 
     st.dataframe([
 
         {
             "#": index + 1,
-            "File Name": item["file_name"],
-            "Part No": item["part_no"],
-            "Description": item["description"],
-            "REV": item["rev"],
-            "QTY": item["qty"]
+
+            "File Name":
+                item["file_name"],
+
+            "Part No":
+                item["part_no"],
+
+            "Description":
+                item["description"],
+
+            "REV":
+                item["rev"],
+
+            "QTY":
+                item["qty"]
         }
 
         for index, item in enumerate(items)
 
     ])
 
+    # ========================================
+    # GENERATE COC
+    # ========================================
+
     if st.button("Generate COC"):
 
-        doc = Document("COC Format.docx")
+        # ------------------------------------
+        # LOAD TEMPLATE
+        # ------------------------------------
+
+        doc = Document(
+            "COC Format.docx"
+        )
+
+        # ------------------------------------
+        # TABLE REFERENCES
+        # ------------------------------------
 
         top_table = doc.tables[0]
 
         parts_table = doc.tables[1]
+
+        # ------------------------------------
+        # FILL HEADER TABLE
+        # ------------------------------------
 
         fill_value_after_label(
             top_table,
@@ -190,6 +309,10 @@ if uploaded_files:
             po_number
         )
 
+        # ------------------------------------
+        # REMOVE OLD PART ROWS
+        # ------------------------------------
+
         while len(parts_table.rows) > 1:
 
             row = parts_table.rows[1]
@@ -198,24 +321,49 @@ if uploaded_files:
                 row._element
             )
 
+        # ------------------------------------
+        # ADD NEW PART ROWS
+        # ------------------------------------
+
         for index, item in enumerate(
             items,
             start=1
         ):
 
-            row_cells = parts_table.add_row().cells
+            row_cells = (
+                parts_table.add_row().cells
+            )
 
             row_cells[0].text = str(index)
 
-            row_cells[1].text = item["part_no"]
+            row_cells[1].text = (
+                item["part_no"]
+            )
 
-            row_cells[2].text = item["description"]
+            row_cells[2].text = (
+                item["description"]
+            )
 
-            row_cells[3].text = item["rev"]
+            row_cells[3].text = (
+                item["rev"]
+            )
 
-            row_cells[4].text = item["qty"]
+            row_cells[4].text = (
+                item["qty"]
+            )
 
-        insert_signature(doc, worker)
+        # ------------------------------------
+        # INSERT SIGNATURE
+        # ------------------------------------
+
+        insert_signature(
+            doc,
+            worker
+        )
+
+        # ------------------------------------
+        # SAVE FILE
+        # ------------------------------------
 
         buffer = BytesIO()
 
@@ -227,9 +375,20 @@ if uploaded_files:
             f"COC_{po_number or customer_name or 'Generated'}.docx"
         )
 
+        # ------------------------------------
+        # DOWNLOAD BUTTON
+        # ------------------------------------
+
         st.download_button(
             label="Download COC DOCX",
+
             data=buffer,
+
             file_name=file_name,
-            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+            mime=(
+                "application/"
+                "vnd.openxmlformats-officedocument."
+                "wordprocessingml.document"
+            )
         )
