@@ -32,14 +32,45 @@ def extract_text_from_pdf(uploaded_file):
     return text
 
 def extract_item_data(text, file_name):
-    po_match = re.search(r'Customer ID\s*([A-Za-z0-9\/\-_]+)', text)
-    part_no_match = re.search(r'Part No\.\s*(\S+)', text)
-    desc_match = re.search(r'Part Name\s*(.*?)\s+Material', text)
-    rev_match = re.search(r'Drawing Rev\s*(\d+)', text)
-    qty_match = re.search(r'Lot Qty\s*(\d+)', text)
+    supplier_match = re.search(
+        r'Supplier Name\s*(.+)',
+        text
+    )
+
+    customer_match = re.search(
+        r'Customer\s*(.+?)\s*KSW Project ID',
+        text
+    )
+
+    po_match = re.search(
+        r'Customer ID\s*([A-Za-z0-9\/\-_]+)',
+        text
+    )
+
+    part_no_match = re.search(
+        r'Part No\.\s*(\S+)',
+        text
+    )
+
+    desc_match = re.search(
+        r'Part Name\s*(.*?)\s+Material',
+        text
+    )
+
+    rev_match = re.search(
+        r'Drawing Rev\s*(\d+)',
+        text
+    )
+
+    qty_match = re.search(
+        r'Lot Qty\s*(\d+)',
+        text
+    )
 
     return {
         "file_name": file_name,
+        "supplier": supplier_match.group(1).strip() if supplier_match else "",
+        "customer": customer_match.group(1).strip() if customer_match else "",
         "po": po_match.group(1).strip() if po_match else "",
         "part_no": part_no_match.group(1).strip() if part_no_match else "",
         "description": desc_match.group(1).strip() if desc_match else "",
@@ -97,13 +128,21 @@ if uploaded_files:
         items.append(item)
 
     coc_date = datetime.today().strftime("%d %b %Y")
+
+    default_supplier = items[0]["supplier"] if items else ""
+    default_customer = items[0]["customer"] if items else ""
     default_po = items[0]["po"] if items else ""
 
     st.subheader("Header Information")
 
+    supplier_name = st.text_input(
+        "Supplier Name",
+        value=default_supplier
+    )
+
     customer_name = st.text_input(
         "Customer Name",
-        value="KSW"
+        value=default_customer
     )
 
     po_number = st.text_input(
@@ -117,6 +156,9 @@ if uploaded_files:
         {
             "#": index + 1,
             "File Name": item["file_name"],
+            "Supplier": item["supplier"],
+            "Customer": item["customer"],
+            "PO Number": item["po"],
             "Part No": item["part_no"],
             "Description": item["description"],
             "REV": item["rev"],
@@ -130,8 +172,8 @@ if uploaded_files:
 
         replace_placeholders(doc, {
             "[Date]": coc_date,
-            "[Supplier Name]": "Bconduct HK",
-            "[Supplier name]": "Bconduct HK",
+            "[Supplier Name]": supplier_name,
+            "[Supplier name]": supplier_name,
             "[Customer Name]": customer_name,
             "[Customer Id]": po_number
         })
